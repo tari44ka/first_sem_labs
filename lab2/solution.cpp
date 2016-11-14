@@ -8,12 +8,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <vector>
+#include <iostream>
 
 #define OS Ubuntu
 #if OS == Ubuntu
 #define FILE_SEP "/"
 #elif
-#define FILE_SEP "\"
+#define FILE_SEP "\\"
 #endif
 
 using std::vector;
@@ -34,17 +35,20 @@ void first_problem(char* path)
     stat(path, &buf);
     if (buf.st_mode & S_IFDIR)
     {
-        klp_print(path, "");
+        char * empty = new char[1];
+        empty[0] = '\0';
+        klp_print(path, empty);
+        delete [] empty;
     }
     else
     {
-        printf("This is not directory\n");
+        std::cout << "This is not directory" << std::endl;
     }
 }
 
 void klp_print(char* path, char* name)
 {
-    printf("%s\n", name);
+    std::cout << name << std::endl;
     struct stat buf;
     stat(path, &buf);
     if (buf.st_mode & S_IFDIR)
@@ -54,20 +58,20 @@ void klp_print(char* path, char* name)
         while ((ent = readdir (dir)) != NULL) {
                 if (ent->d_name[0] != '.')
                 {
-                    char *str = (char*) malloc((strlen(path) + strlen(ent->d_name) + 2) * sizeof(char) );
+                    char *str = new char[strlen(path) + strlen(ent->d_name) + 2];
                     strcpy(str, path);
                     str[strlen(path)] = '\0';
                     strcat(str, FILE_SEP);
                     strcat(str, ent->d_name);
 
-                    char* name_str = (char*)malloc((strlen(name) + strlen(ent->d_name) + 2)*sizeof(char));
+                    char* name_str = new char[strlen(name) + strlen(ent->d_name) + 2];
                     strcpy(name_str, name);
                     name_str[strlen(path)] = '\0';
                     strcat(name_str, FILE_SEP);
                     strcat(name_str, ent->d_name);
                     klp_print(str, name_str);
-                    free(str);
-                    free(name_str);
+                    delete [] str;
+                    delete [] name_str;
                 }
         }
         closedir (dir);
@@ -79,14 +83,16 @@ void second_problem(char* path)
 {
     vector<TreeElement> elements;
     TreeElement nothing;
-    nothing.path = (char*) malloc(1 * sizeof(char));
-    strcpy(nothing.path ,"");
+    nothing.path = new char[1];
+    nothing.path[0] = '\0';
     nothing.size = 0;
     elements.push_back(nothing);
     recursive_solution(elements, path, 0);
     for (int i = 0; i < elements.size(); ++i)
     {
-        printf("%d - %s (%d)\n", i, elements[i].path, elements[i].size);
+        std::cout << "level - " << i;
+        std::cout << "  "  << elements[i].path;
+        std::cout << " (" << elements[i].size << ")" << std::endl;
     }
 }
 
@@ -95,8 +101,8 @@ long recursive_solution(vector<TreeElement> &elements, char* path, int level)
     if (elements.size() <= level)
     {
         TreeElement nothing;
-        nothing.path = (char*) malloc(1 * sizeof(char));
-        strcpy(nothing.path ,"");
+        nothing.path = new char[1];
+        nothing.path[0] = 0;
         nothing.size = 0;
         elements.push_back(nothing);
     }
@@ -110,13 +116,13 @@ long recursive_solution(vector<TreeElement> &elements, char* path, int level)
         while ((ent = readdir (dir)) != NULL) {
                 if (ent->d_name[0] != '.')
                 {
-                    char *str = (char*) malloc((strlen(path) + strlen(ent->d_name)) * sizeof(char) + 3);
+                    char *str = new char[strlen(path) + strlen(ent->d_name) + 2];
                     strcpy(str, path);
                     str[strlen(path)] = '\0';
                     strcat(str, FILE_SEP);
                     strcat(str, ent->d_name);
                     size += recursive_solution(elements, str, level+1);
-                    free(str);
+                    delete [] str;
                 }
         }
         closedir (dir);
@@ -129,7 +135,7 @@ long recursive_solution(vector<TreeElement> &elements, char* path, int level)
     if (elements[level].size < size)
     {
         elements[level].size = size;
-        free( elements[level].path);
+        delete [] elements[level].path;
         elements[level].path = new char[strlen(path) + 1];
         strcpy(elements[level].path, path);
     }
@@ -138,36 +144,35 @@ long recursive_solution(vector<TreeElement> &elements, char* path, int level)
 
 
 
-int main(int argc, char* argv[])
+int main()
 {
-    if (argc < 1)
-    {
-        printf("You have to enter path");
-        return 0;
-    }
-    printf("Please, choose number of question: \n");
-    printf(" 1 - create tree from catalog\n");
-    printf(" 2 - find max object on each tree-level\n");
-    printf(" Remember your path: %s\n", argv[1]);
     int question;
-    scanf("%d", &question);
-
-    switch(question)
+    do
     {
-        case 1:
-        {
-            first_problem(argv[1]);
-            break;
-        }
-        case 2:
-        {
-            second_problem(argv[1]);
-            break;
-        }
-        default:
-            printf("invalid operation number");
-    }
+        std::cout << "Please, enter path" << std::endl;
+        char *path = new char[200];
+        std::cin >> path;//fgets(path, 200, stdin);
+        std::cout << path << std::endl;
+        std::cout << "Please, choose number of question: " << std::endl;
+        std::cout << " 1 - create tree from catalog" << std::endl;
+        std::cout << " 2 - find max object on each tree-level" << std::endl;
 
+        std::cin >> question;
+
+        switch(question)
+        {
+            case 1:
+                first_problem(path);
+                break;
+            case 2:
+                second_problem(path);
+                break;
+            case 0:
+                break;
+            default:
+                std::cout << "unknown operation number" << std::endl;
+        }
+    }while (question != 0);
 
     return 0;
 }
