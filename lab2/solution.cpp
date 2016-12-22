@@ -54,10 +54,13 @@ void klp_print(char* path, char* name)
     if (buf.st_mode & S_IFDIR)
     {
         DIR *dir = opendir(path);
+	if (dir == NULL)
+		return;
         struct dirent *ent;
         while ((ent = readdir (dir)) != NULL) {
                 if (ent->d_name[0] != '.')
                 {
+                    //todo: сделать нормальные имена
                     char *str = new char[strlen(path) + strlen(ent->d_name) + 2];
                     strcpy(str, path);
                     str[strlen(path)] = '\0';
@@ -66,7 +69,7 @@ void klp_print(char* path, char* name)
 
                     char* name_str = new char[strlen(name) + strlen(ent->d_name) + 2];
                     strcpy(name_str, name);
-                    name_str[strlen(path)] = '\0';
+                    name_str[strlen(name)] = '\0';
                     strcat(name_str, FILE_SEP);
                     strcat(name_str, ent->d_name);
                     klp_print(str, name_str);
@@ -109,25 +112,28 @@ long recursive_solution(vector<TreeElement> &elements, char* path, int level)
     long size = 0;
     struct stat buf;
     stat(path, &buf);
-    if (buf.st_mode & S_IFDIR)
+    if (buf.st_mode & S_IFDIR && !( buf.st_mode & S_IFREG))
     {
         DIR *dir = opendir(path);
-        struct dirent *ent;
-        while ((ent = readdir (dir)) != NULL) {
-                if (ent->d_name[0] != '.')
-                {
-                    char *str = new char[strlen(path) + strlen(ent->d_name) + 2];
-                    strcpy(str, path);
-                    str[strlen(path)] = '\0';
-                    strcat(str, FILE_SEP);
-                    strcat(str, ent->d_name);
-                    size += recursive_solution(elements, str, level+1);
-                    delete [] str;
-                }
-        }
-        closedir (dir);
+	if (dir != NULL)
+	{
+        	struct dirent *ent;
+        	while ((ent = readdir (dir)) != NULL) {
+        	        if (ent->d_name[0] != '.')
+        	        {
+        	            char *str = new char[strlen(path) + strlen(ent->d_name) + 2];
+        	            strcpy(str, path);
+        	            str[strlen(path)] = '\0';
+	                    strcat(str, FILE_SEP);
+                	    strcat(str, ent->d_name);
+                	    size += recursive_solution(elements, str, level+1);
+                	    delete [] str;
+                	}
+        	}
+        	closedir (dir);
+	}
     }
-    else
+    else 
     {
         size = buf.st_size;
     }

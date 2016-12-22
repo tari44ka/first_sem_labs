@@ -2,25 +2,28 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <algorithm>
+#include "heap.h"
+#include "elements.h"
 
-struct Call
-{
-	int floor_from;
-	int time;
-	int floor_to;
-};
 
-struct Point
-{
-	int time;
-        int floor;
-};
 
 bool compByTime(Call c1, Call c2)
 {
-        return (c1.time > c2.time);
+        return (c1.time < c2.time);
 }
 
+//todo: почему библиотечка не цепляется?
+int abs(int a)
+{
+    return (a>= 0)? a : -1 * a;
+}
+
+/*
+    Читать из файла вызовы.
+    Сяитается, что в файле записаны вызовы в следующем формате:
+    время - номер этажа, с которого вызывают - номер этажа, на который поедут.
+*/
 void readFromFile(char* fileName, std::vector<Call> &calls)
 	throw (int)
 {
@@ -33,54 +36,34 @@ void readFromFile(char* fileName, std::vector<Call> &calls)
 	calls.clear();
 	while (!fin.eof())
 	{
-		std::cout << "a " ;
-		//todo: настроить чтение через перегрузку оператора
-		Call call;
-		fin >> call.time;
-		fin >> call.floor_from;
-		fin >> call.floor_to;
+                Call call;
+                fin >> call;
 		calls.push_back(call);
 	}
 	//todo: понять природу данного костыля и удалить его
+        // почему-то последняя запись из файла считывается два раза.
 	calls.pop_back();
 }
 
 void print(std::vector<Call> &calls)
 {
-	//todo: заменить на итератор
-	std::cout << calls.size() << std::endl;
-	for (int i = 0; i < calls.size(); ++i)
-	{
-		//todo: настроить через перегрузку оператора
-		std::cout << calls[i].time << " ";
-		std::cout << calls[i].floor_from << " ";
-		std::cout << calls[i].floor_to << std::endl;
-	}
+        std::cout << calls.size() << std::endl;
+        for (std::vector<Call>::iterator it = calls.begin(); it != calls.end();it++)
+            std::cout << *it << std::endl;
 }
 
-void print(std::vector<Point> &points)
-{
-        //todo: заменить на итератор
-        std::cout << calls.size() << std::endl;
-        for (int i = 0; i < points.size(); ++i)
-        {
-                //todo: настроить через перегрузку оператора
-                std::cout << points[i].time << " ";
-                std::cout << points[i].floor << std::endl;
-        }
-}
 
 /*
-Данная функция ищет самую интересную цель. Эта цель должна быть в указанный момент
-времени  curTime и быть максимально далеко от curFloor
-Также известно, что все объекты с указанным временем находятся в начале вектора
+Данная функция ищет самую интересную цель. Эта цель должна быть самой ранней, а среди
+самых ранних - максимально далекой
 */
-int findNext(std::vector<Call> &calls, int curTime, int curFloor)
+int findNext(std::vector<Call> &calls, int curFloor)
 {
     int index = 0;
     int maxDistance = abs(curFloor - calls[0].floor_from);
+    int time = calls[0].time;
     int i = 1;
-    while ((i < calls.size()) && (calls[i].time <= curTime))
+    while ((i < calls.size()) && (calls[i].time == time))
     {
         int curDistance = abs(curFloor - calls[i].floor_from);
         if (curDistance > maxDistance)
@@ -88,98 +71,163 @@ int findNext(std::vector<Call> &calls, int curTime, int curFloor)
             maxDistance = curDistance;
             index = i;
         }
+        i++;
     }
     return index;
 }
 
 /*Функция проверяет, нет ли до и включая текущего момента вывозов лифта с данного этажа в нужном направлении*/
-void haveCallHere(std::vector<Calls> &calls, int curTime, int curFloor, bool increase,
-                  std::vector<Calls> &indexes)
+void haveCallHere(std::vector<Call> &calls, int curTime, int curFloor,
+                  std::vector<int> &indexes)
 {
     indexes.clear();
     int i = 0;
-    while ((i < calls.size()) && (calls[i].time <= curTime))
+    while ((i < calls.size()) && (calls[i].time < curTime))
     {
-        if ((calls[i].floor_from == curFloor) &&
-            (calls[i].floor_to > curFloor) == increase)
+        if (calls[i].floor_from == curFloor)
             indexes.push_back(i);
+        i++;
     }
 }
 
-void findElevatorPlace(std::vector <Call> &calls,
-                       std::vector <Point> &points)
+bool callInDirection(int curFloor, int floorTo, bool increase)
 {
-        //todo: отсортировать вызовы
-        Point start;
-        start.time = 0;
-        start.floor = 1;
-        points.push_back(start);
+    return increase? (floorTo > curFloor) : (floorTo < curFloor);
+}
+void findElevatorPlace(std::vector <Call> &calls)
+{
+        std::sort (calls.begin(), calls.end(), compByTime);
 
-        int currZhile = 0;
         int curTime = 1;
         int curFloor = 1;
         bool increase = true;
 
+        int currentTarget = 0;
+        Heap targetHeap;
 
         /*У лифта два состояния:
             1) Есть цель: тогда идем в этом направлении собирая по пути всех тех,
                кто под эту цель подходит (едет в том же направлении)
             2) Нет цели: тогда берем самый ранний по времени вызов, и едем к нему.
                если "ранних" вызовов несколько, берем тот, что дальше*/
-        while (currZhile != 0 && !points.empty())
+        while (!targetHeap.isEmpty() || !calls.empty())
         {
-            Point point;
-            point.time = curTime;
-            point.floor = curFloor;
-            points.push_back(point);
-            if (currZhile == 0)
+            std::cout << curTime << " - " << curFloor << std::endl;
+
+            // 1.проверить, нет ли с текущего этажа вызова лифта, который случился раньше, чем
+            // текущий момент
+            std::vector<int> indexes;
+            haveCallHere(calls, curTime, curFloor, indexes);
+            // Если вызовы есть, то в лифт зайдут только те люди, которые едут в нужном направлении.
+            // Если направления нет, то те, которые с первым.
+            bool haveStop = false;
+            if (!indexes.empty())
             {
-                if (points[0].time <= curTime)
+                if (currentTarget == 0)
                 {
-                    int index = findNext(calls, curTime, curFloor);
-                    currZhile = calls[index].floor_from;
-                    incrase = (curZhile > curFloor);
+                    increase = calls[indexes[0]].floor_to > curFloor;
+                    targetHeap.setDirection(!increase);
+                }
+
+                std::vector <int> toDelete;
+                for (int i = 0; i < indexes.size(); ++i)
+                {
+                    int floorTo = calls[indexes[i]].floor_to;
+                    if (callInDirection( curFloor, floorTo,  increase))
+                    {
+                            std::cout << "somebody in (and want on " << calls[indexes[i]].floor_to << " floor)" << std::endl;
+                            haveStop = true;
+                            int floorTo = calls[indexes[i]].floor_to;
+                            if (floorTo > currentTarget)
+                                currentTarget = floorTo;
+                            targetHeap.push(floorTo);
+                            toDelete.push_back(indexes[i]);
+                    }
+
+                }
+                for (int i = 0; i < toDelete.size(); ++i)
+                {
+                    for (int j = toDelete[i] +1; j < calls.size(); ++j)
+                    {
+                        calls[j -1] = calls[j];
+                    }
+                    calls.pop_back();
                 }
             }
-            else
+            // Если есть кому выйти:
+
+            if (!targetHeap.isEmpty() && (curFloor == targetHeap.getTop()))
             {
-                bool haveStop = false;
-                //TODO выше: соорудить кучу из целей пассажиров, упорядоченную по направлению поездки
-                if (curFloor == /*Взять из кучи голову*/)
+                std::cout << "somebody goes out" << std::endl;
+                targetHeap.pop();
+                if (currentTarget == curFloor)
+                    currentTarget = 0;
+            }
+            // 2. если лифту некуда ехать, найти самый далекий вызов, и отправиться к нему.
+            if ((currentTarget == 0)  && !calls.empty())
+            {
+                if (calls[0].time < curTime)
                 {
-                    /*TODO: Удалить из кучи голову*/
-                    haveStop = true;
-                }
-                std::vector<int> indexes;
-                haveCallHere(calls, curTime, curFloor, increase, indexes);
-                if (!indexes.empty())
-                {
-                    haveStop = true;
-                    /*Пояснение: Грузим всех, кто стоит на этом этаже и едет в нужную сторону*/
-                    for (int i = indexes.size() - 1; i >= 0; --i)
-                    {
-                        /*TODO: добавить их цель в кучу целей*/
-                        calls.remove(indexes[i]);
-                    }
-                }
-                if (!haveStop)
-                {
-                    curFloor++;
+                    int index = findNext(calls, curFloor);
+                    currentTarget = calls[index].floor_from;
+                    increase = calls[index].floor_from > curFloor;
+                    targetHeap.setDirection(!increase);
+                    std::cout << "new target is  " << calls[index].floor_from  << std::endl;
                 }
             }
             curTime ++;
+            if (!haveStop && (currentTarget != 0))
+            {
+                if (increase)
+                    curFloor ++;
+                else
+                    curFloor--;
+            }
+
         }
 }
 
 int main()
 {
-	std::vector<Call> calls;
+        std::vector<Call> calls;
 	//todo: на эту передачу ругается warning. Найти проблему и решить
 	readFromFile("input.txt", calls);
-	
-        std::vector<Point> points;
 
-        findElevatorPlace(calls, points);
-        print(points);
-	return 0;
+        std::cout<< "input calls are: " << std::endl;
+        print(calls);
+        std::cout << " ---------- " << std::endl;
+	
+
+        std::cout << "Elevator path is: " << std::endl;
+        findElevatorPlace(calls);
+
+  /*  Heap heap;
+    heap.setDirection(false);
+    int command;
+    do
+    {
+        std::cout << "enter coomand ";
+        std::cin >> command;
+        switch(command)
+        {
+            case 1:
+                {
+                int value;
+                std::cin >> value;
+                heap.push(value);
+                break;
+            }
+        case 2:
+            {
+                std::cout << heap.getTop();
+                break;
+        }
+        case 3:
+            {
+                heap.pop();
+        }
+        }
+        heap.print();
+    }while (command != 0);*/
+    return 0;
 }
